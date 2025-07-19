@@ -7,6 +7,7 @@ docker compose up -d opensearch-dashboards
 open elastic search : http://localhost:5601/
 go to Dev Tools menu then put this mapping
 
+```json
 PUT _index_template/nginx_elastic_stack_example
 {
   "index_patterns": ["nginx-*"],
@@ -66,6 +67,8 @@ PUT _index_template/nginx_elastic_stack_example
     "description": "Template for nginx logs with geoip and string field normalization"
   }
 }
+
+```
 
 # start logstash and file beat
 docker compose up -d logstash  
