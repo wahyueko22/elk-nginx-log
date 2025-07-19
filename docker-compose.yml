@@ -1,0 +1,98 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    platform: linux/amd64  # This is the crucial fix
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -XX:UseAVX=0
+      # Changed security settings to enable authentication
+      - DISABLE_SECURITY_PLUGIN=false
+      - bootstrap.memory_lock=true
+      - JAVA_HOME=/usr/share/opensearch/jdk
+      # Add initial admin password
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+      # Security settings
+      - plugins.security.ssl.http.enabled=false
+      - plugins.security.allow_default_init_securityindex=true
+      #- plugins.security.authcz.admin_dn=["CN=kirk,OU=client,O=client,L=test,C=de"]
+      #- plugins.security.nodes_dn=["CN=node-1,OU=node,O=node,L=test,C=de"]
+      #- plugins.security.audit.type=internal_opensearch
+    ports:
+      - "9200:9200"
+    networks:
+      - security-monitoring
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cat/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.13.0
+    platform: linux/amd64
+    container_name: opensearch-dashboards
+    ports:
+      - "5601:5601"
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      # Change security settings
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=false
+      - I18N_LOCALE=en
+      # Add credentials
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+    networks:
+      - security-monitoring
+    depends_on:
+      - opensearch
+
+  logstash:
+    image: opensearchproject/logstash-oss-with-opensearch-output-plugin:7.13.2
+    container_name: logstash
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./mylog/:/usr/share/logstash/database/
+    ports:
+      - "5044:5044"
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+      # Add credentials for connecting to OpenSearch
+      - "OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}"
+      - "OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}"
+    networks:
+      - security-monitoring
+    depends_on:
+      - opensearch
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.4
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./mylog/:/usr/share/filebeat/mylog/
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    networks:
+      - security-monitoring
+    depends_on:
+      - logstash
+    restart: unless-stopped
+
+networks:
+  security-monitoring:
+    driver: bridge
+
+volumes:
+  opensearch-data:

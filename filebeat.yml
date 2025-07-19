@@ -1,0 +1,20 @@
+# filebeat.yml
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: true
+
+filebeat.modules:
+- module: suricata
+  eve:
+    enabled: true
+    var.paths: ["/usr/share/filebeat/mylog/sur/*.json"]
+    
+- module: nginx
+  access:
+    enabled: true
+    var.paths: ["/usr/share/filebeat/mylog/nginx/nginx_logs.log*"]
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info
